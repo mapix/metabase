@@ -202,14 +202,6 @@
 
 ;;; ## CLAUSE APPLICATION
 
-;;; ### initial projection
-
-(defn- add-initial-projection [query pipeline]
-  (let [all-fields (distinct (annotate/collect-fields query :keep-date-time-fields))]
-    (when (seq all-fields)
-      {$project (into (array-map) (for [field all-fields]
-                                    {(->lvalue field) (->initial-rvalue field)}))})))
-
 
 ;;; ### filter
 
@@ -222,13 +214,13 @@
                 :contains    (re-pattern value)
                 :starts-with (re-pattern (str \^ value))
                 :ends-with   (re-pattern (str value \$))
-                :=           {"$eq" value}
+                :=           value
                 :!=          {$ne  value}
                 :<           {$lt  value}
                 :>           {$gt  value}
                 :<=          {$lte value}
                 :>=          {$gte value})]
-    {field (if negate?
+    {(s/replace field #"___" ".") (if negate?
              {$not v}
              v)}))
 
@@ -331,8 +323,7 @@
 (defn- generate-aggregation-pipeline
   "Generate the aggregation pipeline. Returns a sequence of maps representing each stage."
   [query]
-  (loop [pipeline [], [f & more] [add-initial-projection
-                                  handle-filter
+  (loop [pipeline [], [f & more] [handle-filter
                                   handle-breakout+aggregation
                                   handle-order-by
                                   handle-fields
@@ -430,8 +421,7 @@
   (let [query   (if (string? query)
                   (decode-iso-date-fncalls (json/parse-string (encode-iso-date-fncalls query) keyword))
                   query)
-        results (mc/aggregate *mongo-connection* collection query
-                              :allow-disk-use true)
+        results (mc/aggregate *mongo-connection* collection query)
         results (if (sequential? results)
                   results
                   [results])
